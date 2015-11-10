@@ -91,6 +91,7 @@
                     <div class="row">
                         <div class="col-lg-12">
                             <form id="login-form" method="post" role="form">
+                                <input type="hidden" name="form-name" value="login-form" />
                                 <div class="form-group">
                                     <input type="text" name="userName" id="userName" tabindex="1" class="form-control"
                                            placeholder="Username" value=""/>
@@ -110,13 +111,14 @@
                                 <div class="alert alert-danger">
                                     <ul>
                                         <li>Login failed.</li>
-                                        <li>Usename or Password is not match.</li>
-                                        <li>You can still
-                                            fail <span>5</span> times,
-                                            then you will be blocked in <span>30</span> seconds.
+                                        <li class="not-match">Usename or Password is not match.</li>
+                                        <li class="try-time">You can still
+                                            fail <span class="times">5</span> times,
+                                            then you will be blocked in <span class="wait">30</span> seconds.
                                         </li>
-                                        <li>Usename or Password should not be empty.</li>
-                                        <li>Too many tries. You need to wait <span>30</span> seconds to be unblocked.
+                                        <li class="empty-input">Usename or Password should not be empty.</li>
+                                        <li class="block-time">Too many tries. You need to wait <span
+                                                class="time">30</span> seconds to be unblocked.
                                         </li>
                                     </ul>
                                 </div>
@@ -129,7 +131,7 @@
     </div>
 </div>
 
-<div id="files-table" class="container-fluid">
+<div id="files-table" class="container-fluid hide">
     <div class="row">
         <div class="col-sm-9">
             <div class="row">
@@ -234,19 +236,18 @@
     reserved.</p></div>
 <script src="https://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
 <script src="https://cdn.bootcss.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
+<script src="https://cdn.bootcss.com/jquery.form/3.51/jquery.form.min.js"></script>
 <script type="text/javascript">
-    $(function(){
+    $(function () {
         var href = window.location.protocol + '//' + window.location.host + window.location.pathname;
-        if(window.location.href != href) {
+        if (window.location.href != href) {
             // force href
             window.location.href = href;
         }
-        $('.navbar ul li a').click(function(){
-            var link = $(this);
-            link.parent().addClass('active').siblings().removeClass('active');
-        });
+
         var page = {};
         page.loginDialog = $('#login-dialog');
+
         page.fileTable = $('#files-table');
         page.logoutLink = $('.link-logout');
         page.modules = $().add(page.loginDialog).add(page.fileTable);
@@ -255,15 +256,22 @@
             page.loginDialog.removeClass("hide");
             page.logoutLink.parents("ul").addClass("hide");
         }
+        page.showFiles = function () {
+            page.modules.addClass('hide');
+            page.fileTable.removeClass('hide');
+        }
         //page.showLogin();
         window.page = page;
         $.ajaxSetup({
             //global: true,
             url: href + '?_x=1'
         });
-        $.get(href, {_x: 1}, function (response, status, xhr){
-            window.response = response;
+        $.get(href, {_x: 1}, function (response, status, xhr) {
+            //window.response = response;
             var result = page.processResponseXML(response, status, xhr);
+            if (result.code == 200) {
+                page.showFiles();
+            }
         });
         page.processResponseXML = function (response, status, xhr) {
             var result = {};
@@ -273,12 +281,74 @@
             result.dataElement = xml.find('data');
             if (result.code == 403) {
                 page.showLogin();
-                
+                var hasError = false;
+                var alert = page.loginDialog.find('.alert');
+                alert.addClass('hide');
+                alert.find('li').addClass('hide');
+
+                var msg = undefined;
+
+                var notMatch = alert.find('.not-match');
+                var tryTime = alert.find('.try-time');
+                var emptyInput = alert.find('.empty-input');
+                var blockTime = alert.find('.block-time');
+
+                msg = result.dataElement.find('not-match');
+                if (msg.length) {
+                    hasError = true;
+                    notMatch.removeClass('hide');
+                }
+
+                msg = result.dataElement.find('try-time');
+                if (msg.length) {
+                    hasError = true;
+                    tryTime.removeClass('hide');
+                    tryTime.find('.times').text(msg.text());
+                    tryTime.find('.wait').text(result.dataElement.find('block-wait').text());
+                }
+
+                msg = result.dataElement.find('empty-input');
+                if(msg.length) {
+                    hasError = true;
+                    emptyInput.removeClass('hide');
+                }
+
+                msg = result.dataElement.find('block-time');
+                if (msg.length) {
+                    hasError = true;
+                    blockTime.removeClass('hide');
+                    blockTime.find('.time').text(msg.text());
+                }
+
+                if (hasError) {
+                    alert.removeClass('hide');
+                    $(alert.find('li').get(0)).removeClass('hide');
+                }
+
             } else {
                 page.loginDialog.addClass('hide');
             }
             return result;
         };
+
+        //
+        $('.navbar ul li a').click(function () {
+            var link = $(this);
+            link.parent().addClass('active').siblings().removeClass('active');
+        });
+        // login form
+        $('#login-form').on('submit',function (e){
+            e.preventDefault();
+            $(this).ajaxSubmit({
+                data: {_x: 1},
+                success: function (response, status, xhr) {
+                    var result = page.processResponseXML(response);
+                    if (result.code == 200) {
+                        page.showFiles();
+                    }
+                }
+            });
+        });
     });
 </script>
 </body>

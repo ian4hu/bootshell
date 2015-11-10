@@ -1,20 +1,17 @@
-<%@ page import="java.io.IOException" %>
-<%@ page import="java.util.Map" %>
-<%@ page import="com.sun.xml.internal.fastinfoset.dom.DOMDocumentSerializer" %>
 <%@ page import="org.w3c.dom.Document" %>
-<%@ page import="javax.xml.parsers.DocumentBuilderFactory" %>
-<%@ page import="javax.xml.parsers.DocumentBuilder" %>
-<%@ page import="javax.xml.parsers.ParserConfigurationException" %>
-<%@ page import="javax.xml.transform.TransformerFactory" %>
-<%@ page import="javax.xml.transform.Transformer" %>
-<%@ page import="javax.xml.transform.dom.DOMSource" %>
-<%@ page import="javax.xml.transform.TransformerConfigurationException" %>
-<%@ page import="javax.xml.transform.stream.StreamResult" %>
-<%@ page import="javax.xml.transform.TransformerException" %>
 <%@ page import="org.w3c.dom.Element" %>
-<%@ page import="java.util.List" %>
+<%@ page import="javax.xml.parsers.DocumentBuilder" %>
+<%@ page import="javax.xml.parsers.DocumentBuilderFactory" %>
+<%@ page import="javax.xml.parsers.ParserConfigurationException" %>
+<%@ page import="javax.xml.transform.Transformer" %>
+<%@ page import="javax.xml.transform.TransformerException" %>
+<%@ page import="javax.xml.transform.TransformerFactory" %>
+<%@ page import="javax.xml.transform.dom.DOMSource" %>
+<%@ page import="javax.xml.transform.stream.StreamResult" %>
+<%@ page import="java.io.IOException" %>
 <%@ page import="java.util.HashMap" %>
-<%@ page import="com.sun.xml.internal.ws.util.StringUtils" %>
+<%@ page import="java.util.List" %>
+<%@ page import="java.util.Map" %>
 <%!
     public static final class Config {
         public static final String USER = "laohu";
@@ -86,8 +83,9 @@
         public boolean isLogined() {
             return Config.USER.equals(session.getAttribute("_user"));
         }
+
         public boolean isInLogin() {
-            return request.getMethod().equals("POST") && "login-form".equals(request.getParameter("form-name"));
+            return request.getMethod().toUpperCase().equals("POST") && "login-form".equals(request.getParameter("form-name"));
         }
 
         public int getBlockTime() {
@@ -138,15 +136,12 @@
                 TransformerFactory transformerFactory = TransformerFactory.newInstance();
                 Transformer transformer = transformerFactory.newTransformer();
                 DOMSource domSource = new DOMSource(doc);
-                StreamResult streamResult = new StreamResult(response.getOutputStream());
+                StreamResult streamResult = new StreamResult(out);
                 transformer.transform(domSource, streamResult);
             } catch (TransformerException e) {
                 e.printStackTrace();
                 return;
             } catch (ParserConfigurationException e) {
-                e.printStackTrace();
-                return;
-            } catch (IOException e) {
                 e.printStackTrace();
                 return;
             }
@@ -155,23 +150,23 @@
         protected Element createElement(Document doc, String name, Object value) {
             Element element = doc.createElement(name);
             Class clazz = value.getClass();
-            if (clazz.isPrimitive()) {
-                element.setTextContent(value.toString());
-            } else if (clazz.isArray()) {
+            if (clazz.isArray()) {
                 Object[] items = (Object[]) value;
                 for (Object item : items) {
                     element.appendChild(createElement(doc, "item", item));
                 }
-            } else if (clazz.isAssignableFrom(List.class)) {
+            } else if (List.class.isAssignableFrom(clazz)) {
                 List<Object> items = (List<Object>) value;
                 for (Object item : items) {
                     element.appendChild(createElement(doc, "item", item));
                 }
-            } else if (clazz.isAssignableFrom(Map.class)) {
+            } else if (Map.class.isAssignableFrom(clazz)) {
                 Map<Object, Object> map = (Map<Object, Object>) value;
                 for (Map.Entry entry : map.entrySet()) {
                     element.appendChild(createElement(doc, entry.getKey().toString(), entry.getValue()));
                 }
+            } else {
+                element.setTextContent(value.toString());
             }
             return element;
         }
@@ -190,6 +185,7 @@
                 data.put("username", userName);
                 code = 200;
                 message = "OK";
+                session.setAttribute("_user", Config.USER);
                 return;
             }
             onLoginFailed();
@@ -198,13 +194,14 @@
         protected boolean checkCanLogin() {
             int blockTime = getBlockTime();
             boolean ret = blockTime > 0;
-            if (!ret) {
+            if (ret) {
                 data.put("block-time", blockTime);
             }
-            return ret;
+            return !ret;
         }
 
         protected void onLoginFailed() {
+            data.put("not-match", 1);
             int tryTime = getTryTime();
             ++tryTime;
             data.put("try-time", tryTime);
@@ -215,10 +212,15 @@
                 data.put("block-time", getBlockTime());
             }
             setTryTime(tryTime);
+            data.put("max-try", Config.MAX_FAIL);
+            data.put("block-wait", Config.BLOCKING_TIME);
         }
     }
 
 
 %>
-<%if (onService(request, response, session, pageContext, application, config, out)) return;%>
-<jsp:include page="bootshell2.jsp"/>
+<%
+    if (onService(request, response, session, pageContext, application, config, out)) {
+        return;
+    }
+%>
