@@ -39,7 +39,7 @@
         private JspWriter out;
         private int code = 403;
         private String message = "Unauthorized";
-        private HashMap<String, Object> data = new HashMap<>();
+        private HashMap<String, Object> data = new HashMap<String, Object>();
 
         public Shell(HttpServletRequest request, HttpServletResponse response, HttpSession session, JspContext context, ServletContext application, ServletConfig config, JspWriter out) {
             this.request = request;
@@ -310,9 +310,9 @@
         }
 
         protected List<HashMap<String, String>> getBreadCrumb(String path) {
-            ArrayList<HashMap<String, String>> filesList = new ArrayList<>();
+            ArrayList<HashMap<String, String>> filesList = new ArrayList<HashMap<String, String>>();
             File file = new File(path);
-            Stack<File> files = new Stack<>();
+            Stack<File> files = new Stack<File>();
             HashMap<String, String> fileInfo;
             while (file != null) {
                 files.add(file);
@@ -320,7 +320,7 @@
             }
             while (files.size() > 0) {
                 file = files.pop();
-                fileInfo = new HashMap<>();
+                fileInfo = new HashMap<String, String>();
                 fileInfo.put("name", file.getName());
                 if (file.getParentFile() == null) {
                     fileInfo.put("name", "ROOT");
@@ -358,7 +358,10 @@
                 DOMSource domSource = new DOMSource(doc);
                 StreamResult streamResult = new StreamResult(out);
                 transformer.transform(domSource, streamResult);
-            } catch (TransformerException | ParserConfigurationException e) {
+            } catch (TransformerException e) {
+                e.printStackTrace();
+                return;
+            } catch (ParserConfigurationException e) {
                 e.printStackTrace();
                 return;
             }
@@ -438,10 +441,10 @@
         }
 
         protected ArrayList<HashMap<String, String>> listFiles(String path) {
-            ArrayList<HashMap<String, String>> files = new ArrayList<>();
+            ArrayList<HashMap<String, String>> files = new ArrayList<HashMap<String, String>>();
             File dir = new File(path);
             HashMap<String, String> fileInfo = null;
-            ArrayList<File> filesList = new ArrayList<>();
+            ArrayList<File> filesList = new ArrayList<File>();
             if (dir.isDirectory()) {
                 filesList.add(dir);
             }
@@ -454,7 +457,7 @@
             }
 
             for (File file : filesList) {
-                fileInfo = new HashMap<>();
+                fileInfo = new HashMap<String, String>();
                 fileInfo.put("name", file.getName());
                 if (file.equals(dir)) {
                     fileInfo.put("name", ".");

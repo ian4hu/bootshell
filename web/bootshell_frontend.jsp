@@ -154,8 +154,8 @@
                         <thead>
                         <tr>
                             <th><label><input type="checkbox" class="select-all"/> All</label></th>
-                            <th style="max-width: 5em;width: 5em;min-width: 5em;">Size</th>
-                            <th style="max-width: 5em;width: 5em;min-width: 5em;">PERM</th>
+                            <th style="max-width: 4em;width: 4em;min-width: 4em;">Size</th>
+                            <th style="max-width: 4em;width: 4em;min-width: 4em;">PERM</th>
                             <th style="max-width: 11em;width: 11em;min-width: 11em;">Operations</th>
                         </tr>
                         </thead>
