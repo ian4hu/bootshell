@@ -506,7 +506,7 @@
                     // resume
                     $(document).scrollTop(parseInt(page.history[path + '@' + from]));
                 }
-                console.log(page.history);
+                //console.log(page.history);
             });
         };
         $(document).on('click', 'table.table tbody tr.type-dir td label span>a', function () {

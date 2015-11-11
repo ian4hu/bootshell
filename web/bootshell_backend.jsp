@@ -111,7 +111,7 @@
                     response.setContentType(contentType);
                     response.setContentLengthLong(file.length());
                     if ("download".equals(action) || contentType.startsWith("application/")) {
-                        response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\"");
+                        response.setHeader("Content-Disposition", "attachment;filename=\"" + file.getName() + "\";filename*=UTF-8''" + URLEncoder.encode(file.getName(), "utf-8"));
                     }
                     out.clearBuffer();
                     response.resetBuffer();
