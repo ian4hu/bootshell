@@ -80,6 +80,7 @@
         </div>
     </div>
 </nav>
+
 <div id="login-dialog" class="container hide" style="margin-top: 5%;">
     <div class="row">
         <div class="col-md-6 col-md-offset-3">
@@ -166,8 +167,9 @@
                             <td>-wr</td>
                             <td>
                             <span class="btn-group btn-group-sm">
-                            <button title="Delete" class="btn btn-danger btn-delete" data-toggle="modal"
-                                    data-target="#delete-modal"><i class="glyphicon glyphicon-remove"></i>
+                            <button title="Delete" class="btn btn-danger btn-delete"
+                               data-toggle="modal"
+                               data-target="#delete-modal"><i class="glyphicon glyphicon-remove"></i>
                             </button>
                             <a title="View" class="btn btn-success btn-view"><i
                                     class="glyphicon glyphicon-eye-open"></i></a>
@@ -208,7 +210,7 @@
                 <div class="hide" id="popover-tpl">
                     <div class="popover">
                         <div class="arrow"></div>
-                        <h3 class="popover-title">Popover 左侧</h3>
+                        <h3 class="popover-title bg-danger">Popover 左侧</h3>
 
                         <div class="popover-content">
                             <p>Sed posuere consectetur est at lobortis. Aenean eu leo quam. Pellentesque ornare sem
@@ -242,6 +244,7 @@
         </div>
     </div>
 </div>
+
 <div class="fix-footer"><p class="text-center">Boot Shell all rights
     reserved.</p></div>
 <script src="https://cdn.bootcss.com/jquery/1.11.3/jquery.min.js"></script>
@@ -454,10 +457,11 @@
                 _x: 1,
                 _a: 'files'
             };
-            if (path) {
+            if (path != undefined) {
                 data.path = path;
             }
             if (from != undefined) {
+                data.from = from;
                 // record
                 page.history[from + '@' + path] = $(document).scrollTop();
             }
@@ -488,15 +492,17 @@
                     row.find('td label input').val(e.path);
                     row.find('td:eq(1)').text(page.formatSize(parseInt(e.size)));
                     row.find('td:eq(2)').text(e.perm);
-                    /*var pop = {
-                     template: page.popoverTpl,
-                     content: 'this can\'t be undone.',
-                     title: 'Delete File',
-                     placement: 'left',
-                     trigger: 'click'
-                     };
-                     row.find('.btn-delete').popover(pop).attr('title', e.type == 'dir' ? 'Delete Folder' : 'Delete File');
-                     */
+
+                    var delBtn = row.find('.btn-delete');
+                    delBtn.attr('title', e.type == 'dir' ? 'Delete Folder' : 'Delete File');
+                    var message = '';
+                    if (e.type = 'dir') {
+                        message = 'Are your sure to delete folder "<strong class="text-danger">' + row.data('path') + '</strong>"(include the subdirectory and files in it)? That can\'t be undone.';
+                    } else {
+                        message = 'Are your sure to delete file "<strong class="text-danger">' + e.path + '</strong>"? That can\'t be undone.'
+                    }
+                    delBtn.data('content', message);
+
                     tbody.append(row);
                     if (e.path == from) {
                         fromRow = row;
@@ -526,7 +532,7 @@
         var btnGo = $('.btn-go');
         btnGo.click(function () {
             var input = btnGo.parents('.input-group').first().find('input');
-            page.refreshFiles(input.val());
+            page.refreshFiles(input.val(), page.pwd);
         });
         $('.input-go input').on('keydown', function (e) {
             //console.log(e.keyCode);
@@ -535,21 +541,15 @@
                 btnGo.click();
             }
         });
-        $(document).on('click', '.btn-delete', function (e) {
-            var btn = $(this);
 
-        });
         $('#delete-modal').on('show.bs.modal', function (event) {
             var btn = $(event.relatedTarget);
             var row = btn.parents('tr').first();
             var modal = $(this);
-            if (row.data('type') == 'dir') {
-                modal.find(".modal-title").text('Delete Folder');
-                modal.find('.message').text('Are your sure to delete folder "' + row.data('path') + '"(include the subdirectory and files in it)?');
-            } else {
-                modal.find('.modal-title').text('Delete File');
-                modal.find('.message').text('Are your sure to delete file "' + row.data('path') + '", that can\'t be undone.');
-            }
+
+            modal.find(".modal-title").text(btn.attr('title'));
+            modal.find('.message').html(btn.data('content'));
+
 
             modal.find('a.btn.btn-danger').off('click').on('click', function () {
                 $.get(row.data('delete_url'), function (response, status, xhr) {
@@ -593,7 +593,7 @@
                     alert.find('p').text(detail);
                     row.addClass('fade in');
                     alert.on('closed.bs.alert', function () {
-                        row.addClass('hide');
+                        row.remove();
                     });
                     setTimeout(function () {
                         alert.find('button').click();
@@ -610,6 +610,7 @@
         page.alert = page.operationPanel.find('.alert').clone();
         page.popoverTpl = $('#popover-tpl').html();
         page.history = {};
+
     });
 </script>
 </body>

@@ -55,6 +55,7 @@
             if (ret) {
                 //
                 internalRun();
+                data.put("breadcrumb", getBreadCrumb(data.get("pwd").toString()));
                 if (code > 0) {
                     output(code, message, data);
                 }
@@ -74,7 +75,6 @@
                 message = "OK";
                 data.put("username", session.getAttribute("_user"));
                 data.put("pwd", getPWD());
-                data.put("breadcrumb", getBreadCrumb(getPWD()));
             }
 
             String action = getParam("_a", null);
@@ -87,7 +87,19 @@
             }
 
             if ("files".equals(action)) {
-                data.put("files", listFiles(getPWD()));
+                String from = getParam("from", null);
+                String path = getParam("path", getPWD());
+                String pwd = resovlePath(path, from);
+                File file = new File(pwd);
+                while (file != null && (!file.exists() || !file.isDirectory())) {
+                    file = file.getParentFile();
+                    pwd = getPWD();
+                }
+                if (file != null) {
+                    pwd = file.getAbsolutePath();
+                }
+                data.put("files", listFiles(pwd));
+                data.put("pwd", pwd);
                 code = 200;
                 message = "OK";
                 return;
@@ -101,7 +113,7 @@
                         out.println("No file specified.");
                         return;
                     }
-                    path = resovlePath(path);
+                    path = resovlePath(path, getPWD());
                     File file = new File(path);
                     if (!file.exists() || file.isDirectory()) {
                         out.println(String.format("\"%s\" is not a file.", path));
@@ -131,7 +143,7 @@
                     message = "Deletion failed.";
                     return;
                 }
-                path = resovlePath(path);
+                path = resovlePath(path, getPWD());
                 File file = new File(path);
                 if (!file.exists()) {
                     data.put("file-not-exists", "");
@@ -160,13 +172,13 @@
                             } else {
                                 ret = stack.pop().delete() && ret;
                                 if (ret) {
-                                    ++ folderCount;
+                                    ++folderCount;
                                 }
                             }
                         } else {
                             ret = ret && stack.pop().delete();
                             if (ret) {
-                                ++ fileCount;
+                                ++fileCount;
                             }
                         }
                     }
@@ -182,18 +194,34 @@
                     message = "Deletion failed.";
                     data.put("access-denied", "");
                     return;
-                } catch (SecurityException e){
+                } catch (SecurityException e) {
                     code = 401;
                     message = "Deletion failed.";
                     data.put("access-denied", "");
                     return;
                 }
             }
+
+            if ("create".equals(action)) {
+                String pwd = getPWD();
+                String name = getParam("name", null);
+                String type = getParam("type", "file");
+                Paths.get(pwd, name);
+                return;
+            }
         }
 
 
-        public String resovlePath(String path) {
+        public String resovlePath(String path, String pwd) {
             path = path.replaceFirst("^~", System.getProperty("user.home", "/"));
+            if (pwd != null) {
+                assert pwd.startsWith("/");
+                File dir = new File(pwd).getParentFile();
+                if (dir != null) {
+                    path = path.replaceFirst("^\\..", dir.getAbsolutePath());
+                }
+                path = path.replaceFirst("^\\.", pwd);
+            }
             return path;
         }
 
@@ -460,9 +488,9 @@
             String path = System.getProperty("user.dir", "/");
             path = getParam("path", path);
             //System.out.println(System.getProperty("user.home"));
-            path = resovlePath(path);
+            path = resovlePath(path, null);
             File file = Paths.get(path).toFile().getAbsoluteFile();
-            while (!file.isDirectory() || !file.exists()) {
+            while (file != null && (!file.isDirectory() || !file.exists())) {
                 file = file.getParentFile();
             }
             if (file != null) {
