@@ -1,3 +1,4 @@
+<%@ page trimDirectiveWhitespaces="true" %>
 <%@ page import="org.w3c.dom.Document" %>
 <%@ page import="org.w3c.dom.Element" %>
 <%@ page import="javax.xml.parsers.DocumentBuilder" %>
